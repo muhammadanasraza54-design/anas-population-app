@@ -8,94 +8,79 @@ import re
 # 1. Page Configuration
 st.set_page_config(layout="wide", page_title="Anas Ghouri - Population Finder")
 
-# CSS for better styling
-st.markdown("""
-    <style>
-    .main > div { padding-top: 2rem; }
-    footer {visibility: hidden;}
-    </style>
-    """, unsafe_allow_html=True)
-
 st.title("🌍 Anas Ghouri - Population Finder & Search")
 
-# 2. State Management (Pin aur Circle ki memory ke liye)
+# 2. State Management (Memory)
 if 'marker_pos' not in st.session_state:
     st.session_state.marker_pos = None
+if 'pop_result' not in st.session_state:
+    st.session_state.pop_result = ""
 
-# Default Start Location (Karachi)
-start_lat, start_lon = 24.8607, 67.0011
+# Function to get population from TIF file
+def get_pop(lat, lon):
+    try:
+        with rasterio.open('pak_pd_2020_1km.tif') as ds:
+            row, col = ds.index(lon, lat)
+            data = ds.read(1)
+            val = data[row, col]
+            if val < 0 or str(val) == 'nan':
+                return "Data not available here (Water/Empty)."
+            return f"Coordinates: {round(lat, 4)}, {round(lon, 4)} | 👥 Population: {round(float(val), 2)}"
+    except:
+        return "Outside data coverage."
 
-# 3. Search Bar
-search_query = st.text_input("Search Location (Place name or Coordinates like 24.8, 67.0):")
+# 3. Search Bar Logic
+search_query = st.text_input("Search Location (City or Coordinates):")
+
+start_lat, start_lon = 24.8607, 67.0011 # Default Karachi
 
 if search_query:
-    # Pehle check karein ke kya ye coordinates hain
     coord_match = re.findall(r"[-+]?\d*\.\d+|\d+", search_query)
     if len(coord_match) >= 2:
-        start_lat, start_lon = float(coord_match[0]), float(coord_match[1])
-        st.session_state.marker_pos = [start_lat, start_lon]
+        s_lat, s_lon = float(coord_match[0]), float(coord_match[1])
+        st.session_state.marker_pos = [s_lat, s_lon]
+        st.session_state.pop_result = get_pop(s_lat, s_lon)
     else:
-        # Agar coordinates nahi hain toh naam se search karein
         try:
-            geolocator = Nominatim(user_agent="anas_explorer_app")
+            geolocator = Nominatim(user_agent="anas_app_final")
             location = geolocator.geocode(search_query, timeout=10)
             if location:
-                start_lat, start_lon = location.latitude, location.longitude
-                st.session_state.marker_pos = [start_lat, start_lon]
-                st.success(f"📍 Found: {location.address}")
-            else:
-                st.error("Location not found. Please try again.")
+                st.session_state.marker_pos = [location.latitude, location.longitude]
+                st.session_state.pop_result = get_pop(location.latitude, location.longitude)
         except:
-            st.warning("Search service busy. Try using coordinates directly.")
+            st.warning("Search service busy.")
 
 # 4. Map Setup
+if st.session_state.marker_pos:
+    start_lat, start_lon = st.session_state.marker_pos
+
 m = folium.Map(location=[start_lat, start_lon], zoom_start=14)
 folium.TileLayer(
     tiles='https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
     attr='Google', name='Google Satellite'
 ).add_to(m)
 
-# 5. Marker aur Circle add karna
 if st.session_state.marker_pos:
     p_lat, p_lon = st.session_state.marker_pos
-    folium.Marker(
-        [p_lat, p_lon], 
-        popup="Selected Point", 
-        icon=folium.Icon(color='red', icon='info-sign')
-    ).add_to(m)
-    
-    folium.Circle(
-        location=[p_lat, p_lon],
-        radius=500, # 500 meters
-        color='yellow',
-        fill=True,
-        fill_opacity=0.3
-    ).add_to(m)
+    folium.Marker([p_lat, p_lon], icon=folium.Icon(color='red')).add_to(m)
+    folium.Circle([p_lat, p_lon], radius=500, color='yellow', fill=True, fill_opacity=0.3).add_to(m)
 
-# 6. Display Map
-# Key mein start_lat is liye dala hai taake search karte hi map jump kare
-output = st_folium(m, height=600, use_container_width=True, key=f"map_{start_lat}")
+# 5. Map Display
+# Note: dynamic key used to force map movement on search
+output = st_folium(m, height=600, use_container_width=True, key=f"map_{start_lat}_{start_lon}")
 
-# 7. Click & Population Logic
+# 6. Click Handling - Update result when clicking
 if output['last_clicked']:
-    lat, lon = output['last_clicked']['lat'], output['last_clicked']['lng']
-    st.session_state.marker_pos = [lat, lon]
-    
-    try:
-        with rasterio.open('pak_pd_2020_1km.tif') as ds:
-            row, col = ds.index(lon, lat)
-            data = ds.read(1)
-            pop_value = data[row, col]
-            
-            # Error check for water or out of bounds
-            if pop_value < 0 or str(pop_value) == 'nan':
-                st.warning(f"📍 Coordinates: {lat}, {lon} | 👥 Data not available here (Likely water or empty land).")
-            else:
-                pop = round(float(pop_value), 2)
-                st.success(f"📍 Coordinates: {lat}, {lon} | 👥 Population Density: {pop} per sq km")
-        
-        # UI refresh for marker update
+    c_lat, c_lon = output['last_clicked']['lat'], output['last_clicked']['lng']
+    # Check if this is a NEW click (to avoid infinite refresh)
+    if st.session_state.marker_pos != [c_lat, c_lon]:
+        st.session_state.marker_pos = [c_lat, c_lon]
+        st.session_state.pop_result = get_pop(c_lat, c_lon)
         st.rerun()
-        
-    except Exception as e:
-        st.error("Point is outside the data coverage area.")
+
+# 7. Final Result Display
+if st.session_state.pop_result:
+    if "Data not available" in st.session_state.pop_result:
+        st.warning(st.session_state.pop_result)
+    else:
+        st.success(st.session_state.pop_result)
