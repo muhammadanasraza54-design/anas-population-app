@@ -8,28 +8,35 @@ import math
 # 1. Page Config
 st.set_page_config(layout="wide", page_title="Anas Population Pro", initial_sidebar_state="collapsed")
 
-# CSS: Top padding khatam karne aur Search Bar ko Right side lane ke liye
+# CSS: White bar (Header), Toolbar aur Footer ko khatam karne ke liye
 st.markdown("""
     <style>
-    .main > div { padding: 0px !important; }
-    .block-container { padding: 0px !important; margin-top: -20px; }
-    iframe { width: 100% !important; height: 88vh !important; border: none; }
+    /* 1. Hide Streamlit Header and Toolbar (The White Bar) */
+    header {visibility: hidden;}
+    [data-testid="stHeader"] {display: none;}
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
     
-    /* Search Bar ko Right Side par Floating banaya hai */
+    /* 2. Remove all default paddings */
+    .main > div { padding: 0px !important; }
+    .block-container { padding: 0px !important; margin: 0px !important; }
+    
+    /* 3. Map should take full height */
+    iframe { width: 100% !important; height: 100vh !important; border: none; margin-top: -50px; }
+
+    /* 4. Search Bar Floating on Top-Right */
     div[data-testid="stForm"] {
         position: fixed;
         top: 20px;
-        right: 20px;
-        width: 320px !important;
+        right: 80px; /* Thora sa gap right se taake button clear rahay */
+        width: 300px !important;
         z-index: 10001;
-        background-color: rgba(255, 255, 255, 0.9);
-        padding: 10px;
-        border-radius: 10px;
-        box-shadow: 0px 4px 10px rgba(0,0,0,0.2);
+        background-color: white;
+        padding: 5px 15px;
+        border-radius: 8px;
+        box-shadow: 0px 4px 10px rgba(0,0,0,0.3);
     }
-    /* Streamlit ki default labels aur gaps khatam karne ke liye */
     label { display: none !important; }
-    .stTextInput { padding-top: 0px !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -47,13 +54,13 @@ def get_density(lat, lon):
             return float(val) if val >= 0 and str(val) != 'nan' else 0.0
     except: return 0.0
 
-# Sidebar Settings
+# Sidebar Radius
 selected_km = st.sidebar.slider("Radius (KM):", 0.5, 10.0, 1.0, 0.5)
 
-# 2. Search Bar (Moved to Top Right)
+# 2. Floating Search Bar (Top-Right)
 with st.form(key='search_form'):
     search_query = st.text_input("", placeholder="🔍 Search Place...", key="query_input")
-    submit_button = st.form_submit_button(label='Search Location', use_container_width=True)
+    submit_button = st.form_submit_button(label='Search', use_container_width=True)
 
 if submit_button and search_query:
     try:
@@ -64,8 +71,8 @@ if submit_button and search_query:
             st.rerun()
     except: st.error("Search Service Busy.")
 
-# 3. Map Setup
-m = folium.Map(location=st.session_state.marker_pos, zoom_start=15)
+# 3. Create Map
+m = folium.Map(location=st.session_state.marker_pos, zoom_start=15, control_scale=True)
 folium.TileLayer(tiles='https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', 
                  attr='Google', name='Google Satellite').add_to(m)
 
@@ -73,30 +80,30 @@ p_lat, p_lon = st.session_state.marker_pos
 folium.Marker([p_lat, p_lon], icon=folium.Icon(color='red')).add_to(m)
 folium.Circle([p_lat, p_lon], radius=selected_km*1000, color='yellow', fill=True, fill_opacity=0.3).add_to(m)
 
-# 4. Age-Wise Stats
+# 4. Stats Calculation
 area = math.pi * (selected_km ** 2)
 total_pop = int(st.session_state.pop_density * area)
 primary_pop = int(total_pop * 0.15)
 secondary_pop = int(total_pop * 0.12)
 
-# 5. Floating Stats Box (Fixed at Top Left)
+# 5. Floating Stats Box (Top-Left)
 stats_html = f'''
-<div style="position: fixed; top: 20px; left: 20px; width: 260px; 
+<div style="position: fixed; top: 20px; left: 20px; width: 240px; 
      background-color: rgba(255, 255, 255, 0.95); border:2px solid #d32f2f; z-index:9999; 
-     padding: 15px; border-radius: 12px; font-family: sans-serif; box-shadow: 0px 4px 15px rgba(0,0,0,0.4);">
-     <b style="color:#d32f2f; font-size:16px;">Anas Age-Wise Analytics</b><br>
-     <hr style="margin:10px 0; border:0.5px solid #ccc;">
+     padding: 12px; border-radius: 10px; font-family: sans-serif; box-shadow: 0px 4px 15px rgba(0,0,0,0.4);">
+     <b style="color:#d32f2f; font-size:15px;">Anas Age-Wise Analytics</b><br>
+     <hr style="margin:8px 0; border:0.5px solid #ccc;">
      👥 <b>Total Pop:</b> {total_pop:,}<br>
      🎓 <b>Primary (5-10):</b> {primary_pop:,}<br>
      🏫 <b>Secondary (11-16):</b> {secondary_pop:,}<br>
-     <hr style="margin:10px 0; border:0.5px solid #ccc;">
+     <hr style="margin:8px 0; border:0.5px solid #ccc;">
      📏 <b>Radius:</b> {selected_km} KM
 </div>
 '''
 m.get_root().html.add_child(folium.Element(stats_html))
 
 # 6. Display Map
-output = st_folium(m, height=850, use_container_width=True, key=f"map_{st.session_state.marker_pos}")
+output = st_folium(m, height=900, use_container_width=True, key=f"map_{st.session_state.marker_pos}")
 
 if output['last_clicked']:
     new_lat, new_lon = output['last_clicked']['lat'], output['last_clicked']['lng']
