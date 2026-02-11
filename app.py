@@ -8,11 +8,21 @@ import math
 # 1. Page Configuration
 st.set_page_config(layout="wide", page_title="Anas Population Pro")
 
-# 2. Basic CSS for Clean Look
+# 2. CSS: Search bar ko niche karne ke liye padding aur margin set kiya
 st.markdown("""
     <style>
-    /* Header aur Padding saaf karne ke liye */
-    .block-container { padding-top: 1rem; padding-bottom: 0rem; }
+    /* Puri container ko thora niche space di hai */
+    .block-container { 
+        padding-top: 2rem !important; 
+        padding-bottom: 0rem; 
+    }
+    
+    /* Search row ko mazeed niche karne ke liye custom class */
+    .search-row {
+        margin-top: 20px;
+        margin-bottom: 20px;
+    }
+    
     [data-testid="stMetricValue"] { font-size: 24px; }
     </style>
     """, unsafe_allow_html=True)
@@ -32,7 +42,7 @@ def get_density(lat, lon):
             return float(val) if val >= 0 and str(val) != 'nan' else 0.0
     except: return 0.0
 
-# 3. SIDEBAR (Radius & Status) - As per your sketch
+# 3. SIDEBAR (Radius & Status)
 with st.sidebar:
     st.header("📏 Settings")
     selected_km = st.slider("Radius KM", 0.5, 10.0, 1.0, 0.5)
@@ -48,28 +58,32 @@ with st.sidebar:
     st.write(f"🏫 Secondary (11-16): {int(total_pop * 0.12):,}")
     st.info(f"Location: {st.session_state.marker_pos}")
 
-# 4. TOP SEARCH BAR - As per your sketch
-# Ek line mein search bar aur button
+# 4. TOP SEARCH BAR (Niche shift kiya hua)
+# Column layout search bar ko ek line mein rakhne ke liye
 col_search, col_btn = st.columns([4, 1])
 with col_search:
     search_query = st.text_input("Search Location", placeholder="Enter city or area name...", label_visibility="collapsed")
 with col_btn:
-    if st.button("Search", use_container_width=True):
-        if search_query:
-            try:
-                loc = Nominatim(user_agent="anas_final_app").geocode(search_query)
-                if loc:
-                    st.session_state.marker_pos = [loc.latitude, loc.longitude]
-                    st.session_state.pop_density = get_density(loc.latitude, loc.longitude)
-                    st.rerun()
-            except: st.error("Search failed, try again.")
+    # Button ko input ke sath align karne ke liye margin
+    st.markdown('<div style="margin-top: 2px;">', unsafe_allow_html=True)
+    search_clicked = st.button("Search", use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-# 5. MAP AREA (Poora bottom section)
+if search_clicked:
+    if search_query:
+        try:
+            loc = Nominatim(user_agent="anas_final_app").geocode(search_query)
+            if loc:
+                st.session_state.marker_pos = [loc.latitude, loc.longitude]
+                st.session_state.pop_density = get_density(loc.latitude, loc.longitude)
+                st.rerun()
+        except: st.error("Search failed, try again.")
+
+# 5. MAP AREA
 m = folium.Map(location=st.session_state.marker_pos, zoom_start=14)
 folium.TileLayer(tiles='https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', 
                  attr='Google', name='Google Satellite').add_to(m)
 
-# Add Circle and Marker
 folium.Marker(st.session_state.marker_pos, icon=folium.Icon(color='red')).add_to(m)
 folium.Circle(st.session_state.marker_pos, radius=selected_km*1000, color='yellow', fill=True, fill_opacity=0.2).add_to(m)
 
