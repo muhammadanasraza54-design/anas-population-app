@@ -8,65 +8,64 @@ import math
 # 1. Page Config
 st.set_page_config(layout="wide", page_title="Anas Population Pro", initial_sidebar_state="collapsed")
 
-# 2. Strong CSS to KILL the white box and center search
+# 2. Custom CSS to fix the Search Bar once and for all
 st.markdown("""
     <style>
     header {visibility: hidden;}
     [data-testid="stHeader"] {display: none;}
     .main > div { padding: 0px !important; }
-    .block-container { padding: 0px !important; margin: 0px !important; }
-    
-    /* Search Bar Fix: No more giant white box */
+    .block-container { padding: 0px !important; }
+
+    /* Floating Search Bar like Image 1 */
     div[data-testid="stForm"] {
         position: fixed;
-        top: 25px;
+        top: 20px;
         left: 50%;
         transform: translateX(-50%);
         width: 450px !important;
-        z-index: 10001;
+        z-index: 99999;
         background-color: white;
-        padding: 10px;
-        border-radius: 12px;
-        box-shadow: 0px 4px 15px rgba(0,0,0,0.3);
-        border: none !important;
+        padding: 5px 15px;
+        border-radius: 8px;
+        box-shadow: 0px 2px 10px rgba(0,0,0,0.2);
+        border: 1px solid #ccc !important;
     }
-    
-    /* Remove the vertical white space behind search */
-    div[data-testid="stVerticalBlock"] > div:has(div[data-testid="stForm"]) {
+
+    /* Removing the massive white background block */
+    [data-testid="stVerticalBlock"] > div:has(div[data-testid="stForm"]) {
         position: absolute;
-        height: 0px !important;
+        z-index: 99999;
     }
 
-    /* Anas Analytics Panel */
-    .stats-card {
+    /* Anas Analytics Panel (Top Left) */
+    .stats-overlay {
         position: fixed;
-        top: 25px;
+        top: 20px;
         left: 20px;
-        width: 260px;
-        background-color: white;
-        padding: 15px;
-        border-radius: 12px;
-        box-shadow: 0px 4px 15px rgba(0,0,0,0.3);
-        z-index: 10000;
-        border-top: 5px solid #d32f2f;
+        width: 240px;
+        background: white;
+        padding: 12px;
+        border-radius: 8px;
+        box-shadow: 0px 2px 10px rgba(0,0,0,0.2);
+        z-index: 99998;
+        border-left: 4px solid #d32f2f;
     }
 
-    /* Radius Pill at Bottom */
-    .slider-pill {
+    /* Radius Slider (Bottom Center) */
+    .slider-container {
         position: fixed;
         bottom: 30px;
         left: 50%;
         transform: translateX(-50%);
-        width: 320px;
+        width: 300px;
         background: white;
-        padding: 10px 20px;
-        border-radius: 50px;
+        padding: 5px 20px;
+        border-radius: 30px;
         box-shadow: 0px 4px 15px rgba(0,0,0,0.3);
-        z-index: 10000;
+        z-index: 99998;
     }
     
-    label { font-weight: bold; color: #333; }
-    iframe { width: 100% !important; height: 100vh !important; border: none; }
+    label { display: none !important; } /* Hide labels to save space */
     </style>
     """, unsafe_allow_html=True)
 
@@ -85,43 +84,43 @@ def get_density(lat, lon):
             return float(val) if val >= 0 and str(val) != 'nan' else 0.0
     except: return 0.0
 
-# 3. Floating UI Controls
-# Search Bar
+# 3. FLOATING SEARCH BAR (Small & Clean)
 with st.form(key='search_form'):
-    search_query = st.text_input("", placeholder="🔍 Search Location...", label_visibility="collapsed")
-    submit = st.form_submit_button("Search", use_container_width=True)
+    col1, col2 = st.columns([4, 1])
+    with col1:
+        search_query = st.text_input("", placeholder="Search Location...", label_visibility="collapsed")
+    with col2:
+        submit = st.form_submit_button("Go")
 
 if submit and search_query:
     try:
-        loc = Nominatim(user_agent="anas_final_fixed_v2").geocode(search_query)
+        loc = Nominatim(user_agent="anas_final_fixed").geocode(search_query)
         if loc:
             st.session_state.marker_pos = [loc.latitude, loc.longitude]
             st.session_state.pop_density = get_density(loc.latitude, loc.longitude)
             st.rerun()
-    except: st.error("Service Busy")
+    except: st.warning("Location not found")
 
-# Radius Slider (Pill Shape)
-st.markdown('<div class="slider-pill">', unsafe_allow_html=True)
-selected_km = st.slider("Select Radius (KM)", 0.5, 10.0, 1.0, 0.5)
+# 4. RADIUS SLIDER (Bottom)
+st.markdown('<div class="slider-container">', unsafe_allow_html=True)
+selected_km = st.slider("", 0.5, 10.0, 1.0, 0.5)
 st.markdown('</div>', unsafe_allow_html=True)
 
-# 4. Stats Calculation
+# 5. STATS BOX (Top Left)
 area = math.pi * (selected_km ** 2)
 total_pop = int(st.session_state.pop_density * area)
 
-# Stats Box
 st.markdown(f'''
-<div class="stats-card">
-    <h3 style="margin:0; color:#d32f2f; font-size:18px;">Anas Analytics</h3>
-    <hr style="margin:10px 0; border:0.5px solid #eee;">
-    <p style="margin:5px 0;">👥 <b>Total Pop:</b> {total_pop:,}</p>
-    <p style="margin:5px 0;">🎓 <b>Primary:</b> {int(total_pop * 0.15):,}</p>
-    <p style="margin:5px 0;">🏫 <b>Secondary:</b> {int(total_pop * 0.12):,}</p>
-    <p style="margin:5px 0;">📍 <b>Lat/Lon:</b> {st.session_state.marker_pos[0]:.4f}, {st.session_state.marker_pos[1]:.4f}</p>
+<div class="stats-overlay">
+    <b style="color:#d32f2f;">Anas Analytics</b><br>
+    <small>👥 Total Pop: {total_pop:,}</small><br>
+    <small>🎓 Primary: {int(total_pop * 0.15):,}</small><br>
+    <small>🏫 Secondary: {int(total_pop * 0.12):,}</small><br>
+    <small>📏 Radius: {selected_km} KM</small>
 </div>
 ''', unsafe_allow_html=True)
 
-# 5. Map Setup
+# 6. MAP
 m = folium.Map(location=st.session_state.marker_pos, zoom_start=14, zoom_control=False)
 folium.TileLayer(tiles='https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', 
                  attr='Google', name='Google Satellite').add_to(m)
@@ -129,12 +128,5 @@ folium.TileLayer(tiles='https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
 folium.Marker(st.session_state.marker_pos, icon=folium.Icon(color='red')).add_to(m)
 folium.Circle(st.session_state.marker_pos, radius=selected_km*1000, color='yellow', fill=True, fill_opacity=0.2).add_to(m)
 
-# 6. Display Map
-output = st_folium(m, height=1000, use_container_width=True, key=f"map_{st.session_state.marker_pos}_{selected_km}")
-
-if output['last_clicked']:
-    new_lat, new_lon = output['last_clicked']['lat'], output['last_clicked']['lng']
-    if st.session_state.marker_pos != [new_lat, new_lon]:
-        st.session_state.marker_pos = [new_lat, new_lon]
-        st.session_state.pop_density = get_density(new_lat, new_lon)
-        st.rerun()
+# 7. OUTPUT
+st_folium(m, height=1200, use_container_width=True, key=f"map_{st.session_state.marker_pos}_{selected_km}")
