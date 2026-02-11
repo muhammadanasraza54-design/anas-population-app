@@ -8,24 +8,28 @@ import math
 # 1. Page Config
 st.set_page_config(layout="wide", page_title="Anas Population Pro", initial_sidebar_state="collapsed")
 
-# CSS: Top area ko clean karne aur search bar ko niche lane ke liye
+# CSS: Top padding khatam karne aur Search Bar ko Right side lane ke liye
 st.markdown("""
     <style>
     .main > div { padding: 0px !important; }
-    .block-container { padding: 0px !important; }
-    iframe { width: 100% !important; height: 85vh !important; border: none; }
+    .block-container { padding: 0px !important; margin-top: -20px; }
+    iframe { width: 100% !important; height: 88vh !important; border: none; }
     
-    /* Search Bar ko Screen ke Bottom Center mein fix kiya hai */
-    .stTextInput { 
+    /* Search Bar ko Right Side par Floating banaya hai */
+    div[data-testid="stForm"] {
         position: fixed;
-        bottom: 30px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 400px !important;
+        top: 20px;
+        right: 20px;
+        width: 320px !important;
         z-index: 10001;
+        background-color: rgba(255, 255, 255, 0.9);
+        padding: 10px;
+        border-radius: 10px;
+        box-shadow: 0px 4px 10px rgba(0,0,0,0.2);
     }
-    /* Form ke border aur background ko hide kiya */
-    div[data-testid="stForm"] { border: none !important; background: none !important; }
+    /* Streamlit ki default labels aur gaps khatam karne ke liye */
+    label { display: none !important; }
+    .stTextInput { padding-top: 0px !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -43,10 +47,24 @@ def get_density(lat, lon):
             return float(val) if val >= 0 and str(val) != 'nan' else 0.0
     except: return 0.0
 
-# Sidebar Radius
+# Sidebar Settings
 selected_km = st.sidebar.slider("Radius (KM):", 0.5, 10.0, 1.0, 0.5)
 
-# 2. Map Setup
+# 2. Search Bar (Moved to Top Right)
+with st.form(key='search_form'):
+    search_query = st.text_input("", placeholder="🔍 Search Place...", key="query_input")
+    submit_button = st.form_submit_button(label='Search Location', use_container_width=True)
+
+if submit_button and search_query:
+    try:
+        loc = Nominatim(user_agent="anas_final_fixed").geocode(search_query, timeout=10)
+        if loc:
+            st.session_state.marker_pos = [loc.latitude, loc.longitude]
+            st.session_state.pop_density = get_density(loc.latitude, loc.longitude)
+            st.rerun()
+    except: st.error("Search Service Busy.")
+
+# 3. Map Setup
 m = folium.Map(location=st.session_state.marker_pos, zoom_start=15)
 folium.TileLayer(tiles='https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', 
                  attr='Google', name='Google Satellite').add_to(m)
@@ -55,13 +73,13 @@ p_lat, p_lon = st.session_state.marker_pos
 folium.Marker([p_lat, p_lon], icon=folium.Icon(color='red')).add_to(m)
 folium.Circle([p_lat, p_lon], radius=selected_km*1000, color='yellow', fill=True, fill_opacity=0.3).add_to(m)
 
-# 3. Stats Logic
+# 4. Age-Wise Stats
 area = math.pi * (selected_km ** 2)
 total_pop = int(st.session_state.pop_density * area)
 primary_pop = int(total_pop * 0.15)
 secondary_pop = int(total_pop * 0.12)
 
-# 4. Floating Stats Box (Ab ye top-left mein bilkul akela aur saaf dikhega)
+# 5. Floating Stats Box (Fixed at Top Left)
 stats_html = f'''
 <div style="position: fixed; top: 20px; left: 20px; width: 260px; 
      background-color: rgba(255, 255, 255, 0.95); border:2px solid #d32f2f; z-index:9999; 
@@ -77,22 +95,8 @@ stats_html = f'''
 '''
 m.get_root().html.add_child(folium.Element(stats_html))
 
-# 5. Search Bar (Moved to Bottom Center via Form)
-with st.form(key='search_form'):
-    search_query = st.text_input("", placeholder="🔍 Search Place (e.g. Korangi)...", key="query_input")
-    submit_button = st.form_submit_button(label='Search', use_container_width=True)
-
-if submit_button and search_query:
-    try:
-        loc = Nominatim(user_agent="anas_final_fixed").geocode(search_query, timeout=10)
-        if loc:
-            st.session_state.marker_pos = [loc.latitude, loc.longitude]
-            st.session_state.pop_density = get_density(loc.latitude, loc.longitude)
-            st.rerun()
-    except: st.error("Search Service Busy.")
-
 # 6. Display Map
-output = st_folium(m, height=800, use_container_width=True, key=f"map_{st.session_state.marker_pos}")
+output = st_folium(m, height=850, use_container_width=True, key=f"map_{st.session_state.marker_pos}")
 
 if output['last_clicked']:
     new_lat, new_lon = output['last_clicked']['lat'], output['last_clicked']['lng']
