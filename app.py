@@ -8,46 +8,61 @@ import math
 # 1. Page Config
 st.set_page_config(layout="wide", page_title="Anas Population Pro", initial_sidebar_state="collapsed")
 
-# Custom CSS for Side Panel and Top Search
+# 2. Strong CSS for Clean Layout
 st.markdown("""
     <style>
+    /* Hide Default Elements */
     header {visibility: hidden;}
     [data-testid="stHeader"] {display: none;}
     .main > div { padding: 0px !important; }
     .block-container { padding: 0px !important; }
     
-    /* Side Panel Container */
-    .side-panel {
-        position: fixed;
-        top: 80px;
-        left: 20px;
-        width: 280px;
-        background-color: white;
-        padding: 20px;
-        border-radius: 15px;
-        box-shadow: 0px 10px 30px rgba(0,0,0,0.1);
-        z-index: 1000;
-        border: 1px solid #eee;
-    }
-
-    /* Top Search Bar positioning */
+    /* 1. Floating Search Bar (Top Center) */
     div[data-testid="stForm"] {
         position: fixed;
-        top: 15px;
+        top: 20px;
         left: 50%;
         transform: translateX(-50%);
         width: 500px !important;
-        z-index: 1001;
+        z-index: 10001;
         background-color: white;
-        padding: 5px 20px;
-        border-radius: 50px;
-        box-shadow: 0px 4px 15px rgba(0,0,0,0.1);
-        border: 1px solid #ddd !important;
+        padding: 10px 20px;
+        border-radius: 8px;
+        box-shadow: 0px 2px 6px rgba(0,0,0,0.3);
+        border: 1px solid #ccc !important;
     }
 
-    /* Slider styling inside panel */
-    .stSlider { margin-top: 20px; }
-    label { font-weight: bold; color: #333; }
+    /* 2. Side Panel (Top Left) - Anas Analytics */
+    .stats-panel {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        width: 260px;
+        background-color: white;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0px 2px 10px rgba(0,0,0,0.2);
+        z-index: 10000;
+        border: 1px solid #ddd;
+    }
+
+    /* 3. Radius Slider Container (Bottom Center) */
+    .slider-container {
+        position: fixed;
+        bottom: 30px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 350px;
+        background: white;
+        padding: 10px 20px;
+        border-radius: 50px;
+        box-shadow: 0px 4px 12px rgba(0,0,0,0.3);
+        z-index: 10000;
+        text-align: center;
+    }
+    
+    /* Map Full Screen Fix */
+    iframe { width: 100% !important; height: 100vh !important; border: none; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -66,54 +81,57 @@ def get_density(lat, lon):
             return float(val) if val >= 0 and str(val) != 'nan' else 0.0
     except: return 0.0
 
-# 2. Top Search Bar
-with st.form(key='search_form'):
-    search_query = st.text_input("", placeholder="🔍 Search location or paste coordinates...", key="query_input")
-    submit_button = st.form_submit_button(label='Search', use_container_width=True)
+# --- UI ELEMENTS ---
 
-if submit_button and search_query:
+# 1. Floating Search Bar
+with st.form(key='search_form'):
+    search_query = st.text_input("", placeholder="🔍 Search Place...", label_visibility="collapsed")
+    submit = st.form_submit_button("Search", use_container_width=True)
+
+if submit and search_query:
     try:
-        loc = Nominatim(user_agent="anas_pro").geocode(search_query, timeout=10)
+        loc = Nominatim(user_agent="anas_final_fix").geocode(search_query)
         if loc:
             st.session_state.marker_pos = [loc.latitude, loc.longitude]
             st.session_state.pop_density = get_density(loc.latitude, loc.longitude)
             st.rerun()
-    except: st.error("Search Timeout")
+    except: st.error("Search Error")
 
-# 3. Calculation Logic
-# (Note: Radius slider is handled inside the side panel container below)
-area = math.pi * (1.0 ** 2) # Default or updated via session state
+# 2. Radius Slider (Bottom Center)
+st.markdown('<div class="slider-container">', unsafe_allow_html=True)
+selected_km = st.slider("Set Radius (KM)", 0.5, 10.0, 1.0, 0.5, label_visibility="visible")
+st.markdown('</div>', unsafe_allow_html=True)
 
-# 4. Map Setup
-m = folium.Map(location=st.session_state.marker_pos, zoom_start=14)
+# 3. Stats Box (Top Left)
+area = math.pi * (selected_km ** 2)
+total_pop = int(st.session_state.pop_density * area)
+
+st.markdown(f'''
+<div class="stats-panel">
+    <h3 style="margin:0; color:#d32f2f; font-size:18px;">Anas Analytics</h3>
+    <hr style="margin:10px 0;">
+    <p style="margin:5px 0;">👥 <b>Total Pop:</b> {total_pop:,}</p>
+    <p style="margin:5px 0;">🎓 <b>Primary:</b> {int(total_pop * 0.15):,}</p>
+    <p style="margin:5px 0;">🏫 <b>Secondary:</b> {int(total_pop * 0.12):,}</p>
+    <p style="margin:5px 0;">📏 <b>Radius:</b> {selected_km} KM</p>
+</div>
+''', unsafe_allow_html=True)
+
+# --- MAP SETUP ---
+m = folium.Map(location=st.session_state.marker_pos, zoom_start=14, zoom_control=False)
 folium.TileLayer(tiles='https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', 
                  attr='Google', name='Google Satellite').add_to(m)
 
 p_lat, p_lon = st.session_state.marker_pos
-folium.Marker([p_lat, p_lon], icon=folium.Icon(color='red', icon='info-sign')).add_to(m)
-
-# 5. Side Panel UI (Radius + Stats)
-with st.container():
-    st.markdown('<div class="side-panel">', unsafe_allow_html=True)
-    st.markdown("<h3 style='margin:0; color:#d32f2f;'>Anas Analytics</h3>", unsafe_allow_html=True)
-    st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
-    
-    # Radius Slider inside the Panel
-    selected_km = st.slider("Select Radius (KM)", 0.5, 10.0, 1.0, 0.5)
-    
-    # Recalculate based on slider
-    area_new = math.pi * (selected_km ** 2)
-    total_pop = int(st.session_state.pop_density * area_new)
-    
-    # Dynamic Stats Display
-    st.write(f"👥 **Total Pop:** {total_pop:,}")
-    st.write(f"🎓 **Primary (5-10):** {int(total_pop * 0.15):,}")
-    st.write(f"🏫 **Secondary (11-16):** {int(total_pop * 0.12):,}")
-    st.write(f"📍 **Density:** {st.session_state.pop_density:.2f}/km²")
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# Add Circle to Map
+folium.Marker([p_lat, p_lon], icon=folium.Icon(color='red')).add_to(m)
 folium.Circle([p_lat, p_lon], radius=selected_km*1000, color='yellow', fill=True, fill_opacity=0.2).add_to(m)
 
-# 6. Display Full Map
-st_folium(m, height=900, use_container_width=True, key=f"map_{p_lat}_{selected_km}")
+# 4. Final Output
+output = st_folium(m, height=1000, use_container_width=True, key=f"map_{p_lat}_{selected_km}")
+
+if output['last_clicked']:
+    new_lat, new_lon = output['last_clicked']['lat'], output['last_clicked']['lng']
+    if st.session_state.marker_pos != [new_lat, new_lon]:
+        st.session_state.marker_pos = [new_lat, new_lon]
+        st.session_state.pop_density = get_density(new_lat, new_lon)
+        st.rerun()
