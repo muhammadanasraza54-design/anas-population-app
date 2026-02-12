@@ -1,110 +1,103 @@
 import streamlit as st
-import pandas as pd
+import rasterio
 import folium
 from streamlit_folium import st_folium
-from folium.plugins import MarkerCluster
-import rasterio
+from geopy.geocoders import Nominatim
 import math
-import os
 import re
-from math import radians, cos, sin, asin, sqrt
 
-# --- 1. CONFIG ---
-st.set_page_config(layout="wide", page_title="Anas TCF Pro GIS")
+# 1. Page Config
+st.set_page_config(layout="wide", page_title="Anas Population Pro")
 
-def haversine(lat1, lon1, lat2, lon2):
-    R = 6371
-    dLat, dLon = radians(lat2 - lat1), radians(lon2 - lon1)
-    a = sin(dLat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dLon/2)**2
-    return 2 * asin(sqrt(a)) * R
+# CSS: Map ko bottom tak extend karne ke liye height aur padding set ki
+st.markdown("""
+    <style>
+    /* Top space for search bar */
+    .block-container { 
+        padding-top: 5rem !important; 
+        padding-bottom: 0rem !important; 
+        max-width: 100% !important;
+    }
+    
+    /* Remove white space at the bottom */
+    footer {visibility: hidden;}
+    
+    /* Search Form styling */
+    div[data-testid="stForm"] button { display: none; }
+    div[data-testid="stForm"] { border: none !important; padding: 0px !important; }
+    
+    [data-testid="stMetricValue"] { font-size: 24px; }
+    </style>
+    """, unsafe_allow_html=True)
+
+# 2. Session States
+if 'marker_pos' not in st.session_state:
+    st.session_state.marker_pos = [24.8607, 67.0011]
+if 'pop_density' not in st.session_state:
+    st.session_state.pop_density = 0.0
 
 def get_density(lat, lon):
     try:
-        # Anas, ensure 'pak_pd_2020_1km.tif' is in your GitHub folder
         with rasterio.open('pak_pd_2020_1km.tif') as ds:
             row, col = ds.index(lon, lat)
             data = ds.read(1)
             val = data[row, col]
-            return float(val) if val >= 0 and not math.isnan(val) else 0.0
+            return float(val) if val >= 0 and str(val) != 'nan' else 0.0
     except: return 0.0
 
-# --- 2. DATA LOADING ---
-@st.cache_data
-def load_excel_data():
-    file_path = 'TCF_Mapp 1.xlsx' # As per your GitHub screenshot
-    if os.path.exists(file_path):
-        df = pd.read_excel(file_path)
-        df.columns = [str(c).strip().lower() for c in df.columns]
-        if 'year' in df.columns:
-            df['final_year'] = pd.to_numeric(df['year'], errors='coerce').fillna(2024).astype(int)
-        return df
-    return None
-
-df_all = load_excel_data()
-
-# --- 3. SESSION STATE ---
-if 'marker_pos' not in st.session_state:
-    st.session_state.marker_pos = [24.8607, 67.0011]
-
-# --- 4. SIDEBAR (Analytics & Settings) ---
+# 3. SIDEBAR (Radius & Status)
 with st.sidebar:
-    st.image("https://www.tcf.org.pk/wp-content/uploads/2019/09/logo.svg", width=150)
-    st.header("📊 Analytics")
-    radius_km = st.slider("Search Radius (KM)", 0.5, 10.0, 2.0)
-    
-    # Population Logic
-    density = get_density(st.session_state.marker_pos[0], st.session_state.marker_pos[1])
-    total_pop = int(density * (math.pi * radius_km**2))
-    
-    st.metric("Total Population", f"{total_pop:,}")
-    st.write(f"👶 Primary (5-10): {int(total_pop * 0.15):,}")
-    st.write(f"🏫 Secondary (11-16): {int(total_pop * 0.12):,}")
-    
+    st.header("📏 Settings")
+    selected_km = st.slider("Radius KM", 0.5, 10.0, 1.0, 0.5)
     st.markdown("---")
-    if df_all is not None:
-        st.write(f"Total Schools in DB: {len(df_all)}")
+    st.header("📊 Status")
+    area = math.pi * (selected_km ** 2)
+    total_pop = int(st.session_state.pop_density * area)
+    st.metric("Total Population", f"{total_pop:,}")
+    st.write(f"🎓 Primary (5-10): {int(total_pop * 0.15):,}")
+    st.write(f"🏫 Secondary (11-16): {int(total_pop * 0.12):,}")
+    st.info(f"📍 Location: {st.session_state.marker_pos[0]:.4f}, {st.session_state.marker_pos[1]:.4f}")
 
-# --- 5. SEARCH & UI ---
-search_input = st.text_input("🔍 Search Coordinates (Lat, Lon)", placeholder="e.g. 24.89, 67.15")
-if search_input:
+# 4. SEARCH SECTION (Enter key support)
+with st.form(key='my_search_form', clear_on_submit=True):
+    search_input = st.text_input("Search Location", placeholder="Type address or lat, lon then press Enter", label_visibility="collapsed")
+    submit_button = st.form_submit_button("Search")
+
+if submit_button and search_input:
     coord_match = re.findall(r"[-+]?\d*\.\d+|\d+", search_input)
     if len(coord_match) >= 2:
-        st.session_state.marker_pos = [float(coord_match[0]), float(coord_match[1])]
+        try:
+            n_lat, n_lon = float(coord_match[0]), float(coord_match[1])
+            st.session_state.marker_pos = [n_lat, n_lon]
+            st.session_state.pop_density = get_density(n_lat, n_lon)
+            st.rerun()
+        except: st.error("Invalid Coordinates")
+    else:
+        try:
+            geolocator = Nominatim(user_agent="anas_geo_final")
+            location = geolocator.geocode(search_input)
+            if location:
+                st.session_state.marker_pos = [location.latitude, location.longitude]
+                st.session_state.pop_density = get_density(location.latitude, location.longitude)
+                st.rerun()
+            else: st.error("Location not found")
+        except: st.error("Service busy")
 
-# --- 6. MAP CONSTRUCTION ---
-m = folium.Map(location=st.session_state.marker_pos, zoom_start=12, prefer_canvas=True)
+# 5. MAP AREA (Height extended to 850px)
+m = folium.Map(location=st.session_state.marker_pos, zoom_start=14)
+folium.TileLayer(tiles='https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', 
+                 attr='Google', name='Google Satellite').add_to(m)
 
-# Google Satellite HD
-folium.TileLayer(
-    tiles='https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
-    attr='Google', name='Google Satellite', overlay=False
-).add_to(m)
+folium.Marker(st.session_state.marker_pos, icon=folium.Icon(color='red')).add_to(m)
+folium.Circle(st.session_state.marker_pos, radius=selected_km*1000, color='yellow', fill=True, fill_opacity=0.2).add_to(m)
 
-# Cluster Markers for performance
-marker_cluster = MarkerCluster(name="TCF Schools").add_to(m)
+# Map display - Height increased for bottom extension
+output = st_folium(m, height=850, use_container_width=True, key="main_map")
 
-if df_all is not None:
-    for _, row in df_all.iterrows():
-        # Lat/Lon are small letters in your Excel
-        folium.Marker(
-            [row['lat'], row['lon']],
-            popup=f"School: {row.get('school')}<br>Year: {row.get('final_year')}",
-            icon=folium.Icon(color='blue', icon='graduation-cap', prefix='fa')
-        ).add_to(marker_cluster)
-
-# Red Circle for Area
-folium.Circle(
-    st.session_state.marker_pos, 
-    radius=radius_km*1000, 
-    color='red', fill=True, fill_opacity=0.15
-).add_to(m)
-
-# Target Marker
-folium.Marker(st.session_state.marker_pos, icon=folium.Icon(color='red', icon='crosshairs', prefix='fa')).add_to(m)
-
-# Display
-map_output = st_folium(m, width="100%", height=600)
-
-if map_output['last_clicked']:
-    st.session_state.marker_pos = [map_output['last_clicked']['lat'], map_output['last_clicked']['lng']]
-    st.rerun()
+# 6. Click Handling
+if output['last_clicked']:
+    cl_lat, cl_lon = output['last_clicked']['lat'], output['last_clicked']['lng']
+    if abs(st.session_state.marker_pos[0] - cl_lat) > 0.0001:
+        st.session_state.marker_pos = [cl_lat, cl_lon]
+        st.session_state.pop_density = get_density(cl_lat, cl_lon)
+        st.rerun()
