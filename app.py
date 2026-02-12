@@ -8,11 +8,30 @@ import math
 # Page Config
 st.set_page_config(layout="wide", page_title="Anas TCF Multi-Tool")
 
-# --- 🎨 CSS for Clean Look ---
+# --- 🎨 CSS: Sidebar aur Content ko Patti ke Nichay lane ke liye ---
 st.markdown("""
     <style>
-           .block-container { padding-top: 1rem; }
-           .stMetric { background-color: #f0f2f6; padding: 10px; border-radius: 10px; }
+        /* 1. Sidebar ko top patti (60px) ke nichay dhakelne ke liye */
+        [data-testid="stSidebar"] {
+            top: 60px !important;
+            height: calc(100vh - 60px) !important;
+        }
+        
+        /* 2. Sidebar ke upar wala toggle button bhi niche karne ke liye */
+        [data-testid="stSidebarCollapsedControl"] {
+            top: 65px !important;
+        }
+
+        /* 3. Main content ki padding khatam karne ke liye */
+        .block-container {
+            padding-top: 0rem !important;
+            padding-bottom: 0rem !important;
+        }
+
+        /* 4. Iframe/Map ko patti ke sath chipkane ke liye */
+        iframe {
+            margin-top: 0px;
+        }
     </style>
     """, unsafe_allow_html=True)
 
