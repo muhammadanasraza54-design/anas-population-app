@@ -58,14 +58,21 @@ if app_mode == "📊 Population Analysis":
 
 # --- WINDOW 2: ADVANCED GIS MAP (HTML) ---
 elif app_mode == "🌍 Advanced GIS Map":
-    # Margin khatam karne ke liye CSS
+    # 🎨 CSS for Full Screen (Patti khatam karne ke liye)
     st.markdown("""
         <style>
+               /* Header aur top padding khatam karne ke liye */
+               .stAppHeader {display:none;}
                .block-container {
                     padding-top: 0rem;
                     padding-bottom: 0rem;
                     padding-left: 0rem;
                     padding-right: 0rem;
+                }
+               /* Iframe ke gird borders hatane ke liye */
+               iframe {
+                    border: none;
+                    width: 100%;
                 }
         </style>
         """, unsafe_allow_html=True)
@@ -73,7 +80,7 @@ elif app_mode == "🌍 Advanced GIS Map":
     try:
         with open("AnasGhouri_Ultimate_GIS.html", "r", encoding='utf-8') as f:
             html_content = f.read()
-            # Height ko 1000 kar diya gaya hai takay screen par fit aaye
+            # Height ko 100vh (Full Viewport Height) kar diya gaya hai
             components.html(html_content, height=1000, scrolling=True)
     except Exception as e:
         st.error(f"Error: {e}")
