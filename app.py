@@ -5,14 +5,13 @@ from streamlit_folium import st_folium
 import rasterio
 import math
 
-# Page Config
+# Page Config - Wide mode is essential
 st.set_page_config(layout="wide", page_title="Anas TCF Multi-Tool")
 
 # --- NAVIGATION SIDEBAR ---
 with st.sidebar:
     st.image("https://www.tcf.org.pk/wp-content/uploads/2019/09/logo.svg", width=150)
     st.title("Main Menu")
-    # Anas, yahan se aap window switch kar sakte hain
     app_mode = st.radio("Choose Window:", ["📊 Population Analysis", "🌍 Advanced GIS Map"])
 
 # Population Calculation Function
@@ -30,15 +29,22 @@ if app_mode == "📊 Population Analysis":
     if 'marker_pos' not in st.session_state:
         st.session_state.marker_pos = [24.8607, 67.0011]
     
+    # 🔍 SEARCH BAR (Wapas add kar diya gaya hai)
     st.subheader("Population Analytics Tool")
+    search_input = st.text_input("🔍 Search Coordinates (Lat, Lon):", placeholder="e.g. 24.89, 67.15")
     
+    if search_input:
+        try:
+            new_lat, new_lon = map(float, search_input.split(','))
+            st.session_state.marker_pos = [new_lat, new_lon]
+        except:
+            st.warning("Format: Latitude, Longitude")
+
     with st.sidebar:
         radius_km = st.slider("Search Radius (KM)", 0.5, 10.0, 2.0)
         density = get_density(st.session_state.marker_pos[0], st.session_state.marker_pos[1])
         total_pop = int(density * (math.pi * radius_km**2))
         st.metric("Total Population", f"{total_pop:,}")
-        st.write(f"👶 Primary: {int(total_pop * 0.15):,}")
-        st.write(f"🏫 Secondary: {int(total_pop * 0.12):,}")
 
     m = folium.Map(location=st.session_state.marker_pos, zoom_start=13)
     folium.TileLayer(tiles='https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', attr='Google', name='Satellite').add_to(m)
@@ -52,12 +58,22 @@ if app_mode == "📊 Population Analysis":
 
 # --- WINDOW 2: ADVANCED GIS MAP (HTML) ---
 elif app_mode == "🌍 Advanced GIS Map":
-    st.subheader("TCF Advanced GIS Viewer")
+    # Margin khatam karne ke liye CSS
+    st.markdown("""
+        <style>
+               .block-container {
+                    padding-top: 0rem;
+                    padding-bottom: 0rem;
+                    padding-left: 0rem;
+                    padding-right: 0rem;
+                }
+        </style>
+        """, unsafe_allow_html=True)
+    
     try:
-        # Anas, ye wahi file hai jo aapne abhi upload ki hai
         with open("AnasGhouri_Ultimate_GIS.html", "r", encoding='utf-8') as f:
             html_content = f.read()
-            # Full screen display
-            components.html(html_content, height=800, scrolling=True)
+            # Height ko 1000 kar diya gaya hai takay screen par fit aaye
+            components.html(html_content, height=1000, scrolling=True)
     except Exception as e:
-        st.error(f"HTML file load nahi ho saki. Error: {e}")
+        st.error(f"Error: {e}")
