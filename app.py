@@ -4,7 +4,7 @@ from streamlit_folium import st_folium
 import rasterio
 import math
 
-# --- POPULATION FUNCTION (TIF ONLY) ---
+# --- 1. POPULATION LOGIC (Sirf TIF use hogi) ---
 def get_density(lat, lon):
     try:
         # Anas, ensure 'pak_pd_2020_1km.tif' is in your repo
@@ -15,47 +15,49 @@ def get_density(lat, lon):
             return float(val) if val >= 0 and not math.isnan(val) else 0.0
     except: return 0.0
 
-st.set_page_config(layout="wide", page_title="Anas Population Analysis")
-
+# --- 2. CONFIG ---
+st.set_page_config(layout="wide", page_title="TCF Population Analysis")
 if 'marker_pos' not in st.session_state:
     st.session_state.marker_pos = [24.8607, 67.0011]
 
-# --- SIDEBAR (ONLY POPULATION STATS) ---
+# --- 3. SIDEBAR (Population Stats Only) ---
 with st.sidebar:
     st.image("https://www.tcf.org.pk/wp-content/uploads/2019/09/logo.svg", width=150)
-    st.header("📊 Population Analytics")
+    st.header("📊 Analytics")
     radius_km = st.slider("Search Radius (KM)", 0.5, 10.0, 2.0)
     
+    # Calculate Results
     density = get_density(st.session_state.marker_pos[0], st.session_state.marker_pos[1])
     total_pop = int(density * (math.pi * radius_km**2))
     
+    # Display Metrics
     st.metric("Total Population", f"{total_pop:,}")
-    st.write(f"👶 Primary Age: {int(total_pop * 0.15):,}")
-    st.write(f"🏫 Secondary Age: {int(total_pop * 0.12):,}")
+    st.write(f"👶 Primary (5-10): {int(total_pop * 0.15):,}")
+    st.write(f"🏫 Secondary (11-16): {int(total_pop * 0.12):,}")
 
-# --- CLEAN MAP (NO PINS) ---
+# --- 4. CLEAN MAP (BILKUL SAAF) ---
 m = folium.Map(location=st.session_state.marker_pos, zoom_start=13)
 
-# Satellite View
+# Satellite Layer
 folium.TileLayer(
     tiles='https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
     attr='Google', name='Google Satellite', overlay=False
 ).add_to(m)
 
-# Red Selection Circle
+# Target Circle Only
 folium.Circle(
     st.session_state.marker_pos, 
     radius=radius_km*1000, 
     color='red', fill=True, fill_opacity=0.15
 ).add_to(m)
 
-# Single Target Marker
+# Center Point Only
 folium.Marker(
     st.session_state.marker_pos, 
     icon=folium.Icon(color='red', icon='crosshairs', prefix='fa')
 ).add_to(m)
 
-# Display Map
+# Map Display
 map_output = st_folium(m, width="100%", height=600)
 
 if map_output['last_clicked']:
