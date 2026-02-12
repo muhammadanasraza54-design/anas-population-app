@@ -6,22 +6,32 @@ from folium.plugins import MarkerCluster
 import rasterio
 import math
 import os
+import re
 from math import radians, cos, sin, asin, sqrt
 
 # --- 1. CONFIG ---
 st.set_page_config(layout="wide", page_title="Anas TCF Pro GIS")
 
-# Fast Distance Calc
-def fast_haversine(lat1, lon1, lat2, lon2):
+def haversine(lat1, lon1, lat2, lon2):
     R = 6371
     dLat, dLon = radians(lat2 - lat1), radians(lon2 - lon1)
     a = sin(dLat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dLon/2)**2
     return 2 * asin(sqrt(a)) * R
 
-# --- 2. DATA LOADING (CACHED) ---
+def get_density(lat, lon):
+    try:
+        # Anas, ensure 'pak_pd_2020_1km.tif' is in your GitHub folder
+        with rasterio.open('pak_pd_2020_1km.tif') as ds:
+            row, col = ds.index(lon, lat)
+            data = ds.read(1)
+            val = data[row, col]
+            return float(val) if val >= 0 and not math.isnan(val) else 0.0
+    except: return 0.0
+
+# --- 2. DATA LOADING ---
 @st.cache_data
 def load_excel_data():
-    file_path = 'TCF_Mapp 1.xlsx' 
+    file_path = 'TCF_Mapp 1.xlsx' # As per your GitHub screenshot
     if os.path.exists(file_path):
         df = pd.read_excel(file_path)
         df.columns = [str(c).strip().lower() for c in df.columns]
@@ -36,58 +46,65 @@ df_all = load_excel_data()
 if 'marker_pos' not in st.session_state:
     st.session_state.marker_pos = [24.8607, 67.0011]
 
-# --- 4. SIDEBAR & ANALYTICS ---
+# --- 4. SIDEBAR (Analytics & Settings) ---
 with st.sidebar:
-    st.header("⚙️ Settings")
+    st.image("https://www.tcf.org.pk/wp-content/uploads/2019/09/logo.svg", width=150)
+    st.header("📊 Analytics")
     radius_km = st.slider("Search Radius (KM)", 0.5, 10.0, 2.0)
     
-    # Filter schools nearby (Speed Boost!)
-    nearby_df = pd.DataFrame()
+    # Population Logic
+    density = get_density(st.session_state.marker_pos[0], st.session_state.marker_pos[1])
+    total_pop = int(density * (math.pi * radius_km**2))
+    
+    st.metric("Total Population", f"{total_pop:,}")
+    st.write(f"👶 Primary (5-10): {int(total_pop * 0.15):,}")
+    st.write(f"🏫 Secondary (11-16): {int(total_pop * 0.12):,}")
+    
+    st.markdown("---")
     if df_all is not None:
-        # Sirf wahi schools filter karein jo radius mein hain
-        df_all['dist'] = df_all.apply(lambda x: fast_haversine(st.session_state.marker_pos[0], st.session_state.marker_pos[1], x['lat'], x['lon']), axis=1)
-        nearby_df = df_all[df_all['dist'] <= radius_km]
+        st.write(f"Total Schools in DB: {len(df_all)}")
 
-    st.metric("Nearby Schools", len(nearby_df))
-    st.write(f"Total Schools in DB: {len(df_all) if df_all is not None else 0}")
+# --- 5. SEARCH & UI ---
+search_input = st.text_input("🔍 Search Coordinates (Lat, Lon)", placeholder="e.g. 24.89, 67.15")
+if search_input:
+    coord_match = re.findall(r"[-+]?\d*\.\d+|\d+", search_input)
+    if len(coord_match) >= 2:
+        st.session_state.marker_pos = [float(coord_match[0]), float(coord_match[1])]
 
-# --- 5. MAP CONSTRUCTION (OPTIMIZED) ---
-st.subheader(f"📍 Analysis for Lat: {st.session_state.marker_pos[0]:.4f}, Lon: {st.session_state.marker_pos[1]:.4f}")
+# --- 6. MAP CONSTRUCTION ---
+m = folium.Map(location=st.session_state.marker_pos, zoom_start=12, prefer_canvas=True)
 
-m = folium.Map(location=st.session_state.marker_pos, zoom_start=13, prefer_canvas=True)
-
-# Satellite Layer
+# Google Satellite HD
 folium.TileLayer(
     tiles='https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
     attr='Google', name='Google Satellite', overlay=False
 ).add_to(m)
 
-# 1. Cluster nearby schools only (Hazaar markers ke bajaye sirf kareeb wale)
+# Cluster Markers for performance
 marker_cluster = MarkerCluster(name="TCF Schools").add_to(m)
 
-for _, row in nearby_df.iterrows():
-    folium.Marker(
-        [row['lat'], row['lon']],
-        popup=f"School: {row.get('school')}<br>Year: {row.get('final_year')}",
-        icon=folium.Icon(color='blue', icon='graduation-cap', prefix='fa')
-    ).add_to(marker_cluster)
+if df_all is not None:
+    for _, row in df_all.iterrows():
+        # Lat/Lon are small letters in your Excel
+        folium.Marker(
+            [row['lat'], row['lon']],
+            popup=f"School: {row.get('school')}<br>Year: {row.get('final_year')}",
+            icon=folium.Icon(color='blue', icon='graduation-cap', prefix='fa')
+        ).add_to(marker_cluster)
 
-# 2. Search Area Circle
+# Red Circle for Area
 folium.Circle(
     st.session_state.marker_pos, 
     radius=radius_km*1000, 
-    color='red', fill=True, fill_opacity=0.1
+    color='red', fill=True, fill_opacity=0.15
 ).add_to(m)
 
-# 3. Center Crosshair
+# Target Marker
 folium.Marker(st.session_state.marker_pos, icon=folium.Icon(color='red', icon='crosshairs', prefix='fa')).add_to(m)
 
-# Render Map
-map_output = st_folium(m, width="100%", height=550, key="main_map")
+# Display
+map_output = st_folium(m, width="100%", height=600)
 
-# Click Update
 if map_output['last_clicked']:
-    new_pos = [map_output['last_clicked']['lat'], map_output['last_clicked']['lng']]
-    if new_pos != st.session_state.marker_pos:
-        st.session_state.marker_pos = new_pos
-        st.rerun()
+    st.session_state.marker_pos = [map_output['last_clicked']['lat'], map_output['last_clicked']['lng']]
+    st.rerun()
