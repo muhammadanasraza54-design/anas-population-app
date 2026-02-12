@@ -6,19 +6,13 @@ import rasterio
 import math
 
 # Page Config
-st.set_page_config(layout="wide", page_title="Anas TCF Multi-Tool", initial_sidebar_state="expanded")
+st.set_page_config(layout="wide", page_title="Anas TCF Multi-Tool")
 
-# --- 🎨 CSS (Patti khatam + Sidebar fix) ---
+# --- 🎨 CSS for Clean Look ---
 st.markdown("""
     <style>
-           .stAppHeader {background-color: white; height: 30px;}
-           .block-container {
-                padding-top: 1rem;
-                padding-bottom: 0rem;
-                padding-left: 1rem;
-                padding-right: 1rem;
-            }
-           iframe { border: none; width: 100%; }
+           .block-container { padding-top: 1rem; }
+           .stMetric { background-color: #f0f2f6; padding: 10px; border-radius: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -26,7 +20,6 @@ st.markdown("""
 with st.sidebar:
     st.image("https://www.tcf.org.pk/wp-content/uploads/2019/09/logo.svg", width=120)
     st.title("Main Menu")
-    # Yahan se aap window switch karenge
     app_mode = st.radio("Go to Window:", ["📊 Population Analysis", "🌍 Advanced GIS Map"])
     st.markdown("---")
 
@@ -47,7 +40,7 @@ if app_mode == "📊 Population Analysis":
     
     st.subheader("Population Analytics Tool")
     
-    # SEARCH BAR (Nazar aayega)
+    # 🔍 Search bar with current coords
     search_input = st.text_input("🔍 Search Coordinates (Lat, Lon):", value=f"{st.session_state.marker_pos[0]}, {st.session_state.marker_pos[1]}")
     
     if search_input:
@@ -56,11 +49,16 @@ if app_mode == "📊 Population Analysis":
             st.session_state.marker_pos = [float(coords[0]), float(coords[1])]
         except: pass
 
+    # Stats Calculation
     with st.sidebar:
         radius_km = st.slider("Search Radius (KM)", 0.5, 10.0, 2.0)
         density = get_density(st.session_state.marker_pos[0], st.session_state.marker_pos[1])
         total_pop = int(density * (math.pi * radius_km**2))
+        
+        # Displaying all counts
         st.metric("Total Population", f"{total_pop:,}")
+        st.write(f"👶 **Primary (5-10):** {int(total_pop * 0.15):,}")
+        st.write(f"🏫 **Secondary (11-16):** {int(total_pop * 0.12):,}")
 
     m = folium.Map(location=st.session_state.marker_pos, zoom_start=13)
     folium.TileLayer(tiles='https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', attr='Google', name='Satellite').add_to(m)
@@ -78,6 +76,7 @@ elif app_mode == "🌍 Advanced GIS Map":
     try:
         with open("AnasGhouri_Ultimate_GIS.html", "r", encoding='utf-8') as f:
             html_content = f.read()
+            # Height 800 rakhi hai takay bottom buttons nazar aayein
             components.html(html_content, height=800, scrolling=True)
     except Exception as e:
         st.error(f"Error: {e}")
