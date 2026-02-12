@@ -1,5 +1,4 @@
 import streamlit as st
-import pandas as pd
 import folium
 from streamlit_folium import st_folium
 import rasterio
@@ -9,19 +8,12 @@ import re
 from math import radians, cos, sin, asin, sqrt
 
 # --- 1. CONFIG ---
-st.set_page_config(layout="wide", page_title="Anas Population Pro")
+st.set_page_config(layout="wide", page_title="Anas Population Analysis")
 
-# Distance calculation function
-def haversine(lat1, lon1, lat2, lon2):
-    R = 6371
-    dLat, dLon = radians(lat2 - lat1), radians(lon2 - lon1)
-    a = sin(dLat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dLon/2)**2
-    return 2 * asin(sqrt(a)) * R
-
-# Population Density function using your TIF file
+# Population Density function using TIF file
 def get_density(lat, lon):
     try:
-        # Anas, ensure 'pak_pd_2020_1km.tif' is in your GitHub folder
+        # Ensure 'pak_pd_2020_1km.tif' is in your GitHub
         with rasterio.open('pak_pd_2020_1km.tif') as ds:
             row, col = ds.index(lon, lat)
             data = ds.read(1)
@@ -32,14 +24,13 @@ def get_density(lat, lon):
 
 # --- 2. SESSION STATE ---
 if 'marker_pos' not in st.session_state:
-    st.session_state.marker_pos = [24.8607, 67.0011] # Karachi Default
+    st.session_state.marker_pos = [24.8607, 67.0011]
 
-# --- 3. SIDEBAR (Analytics) ---
+# --- 3. SIDEBAR (Analytics Only) ---
 with st.sidebar:
     st.image("https://www.tcf.org.pk/wp-content/uploads/2019/09/logo.svg", width=150)
     st.header("📊 Population Analytics")
     
-    # Radius slider
     radius_km = st.slider("Search Radius (KM)", 0.5, 10.0, 2.0)
     
     # Calculate Results
@@ -52,48 +43,40 @@ with st.sidebar:
     st.write(f"🏫 Secondary Age (11-16): {int(total_pop * 0.12):,}")
     
     st.markdown("---")
-    st.info(f"Current Lat: {st.session_state.marker_pos[0]:.4f}\n\nLon: {st.session_state.marker_pos[1]:.4f}")
+    st.write(f"📍 Lat: {st.session_state.marker_pos[0]:.4f}")
+    st.write(f"📍 Lon: {st.session_state.marker_pos[1]:.4f}")
 
 # --- 4. MAIN INTERFACE ---
-st.subheader("📍 Click on Map to Check Population")
-
-# Search Bar
-search_input = st.text_input("🔍 Search Coordinates (Lat, Lon)", placeholder="e.g. 24.89, 67.15")
+search_input = st.text_input("🔍 Search Coordinates", placeholder="e.g. 24.89, 67.15")
 if search_input:
     coord_match = re.findall(r"[-+]?\d*\.\d+|\d+", search_input)
     if len(coord_match) >= 2:
         st.session_state.marker_pos = [float(coord_match[0]), float(coord_match[1])]
 
-# --- 5. MAP CONSTRUCTION (No School Pins) ---
-# Map build with satellite view
+# --- 5. CLEAN MAP (Pins Removed) ---
 m = folium.Map(location=st.session_state.marker_pos, zoom_start=13)
 
+# Google Satellite Layer
 folium.TileLayer(
     tiles='https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
     attr='Google', name='Google Satellite', overlay=False
 ).add_to(m)
 
-# Red Circle for Area
+# Red Circle for Area Analysis
 folium.Circle(
     st.session_state.marker_pos, 
     radius=radius_km*1000, 
-    color='red', fill=True, fill_opacity=0.15,
-    tooltip="Analysis Area"
+    color='red', fill=True, fill_opacity=0.15
 ).add_to(m)
 
-# Single Target Marker (Center)
-folium.Marker(
-    st.session_state.marker_pos, 
-    icon=folium.Icon(color='red', icon='crosshairs', prefix='fa')
-).add_to(m)
+# Target Marker (Sirf center point dikhane ke liye)
+folium.Marker(st.session_state.marker_pos, icon=folium.Icon(color='red', icon='crosshairs', prefix='fa')).add_to(m)
 
 # Display Map
 map_output = st_folium(m, width="100%", height=600)
 
-# Click to update location
 if map_output['last_clicked']:
-    new_lat = map_output['last_clicked']['lat']
-    new_lon = map_output['last_clicked']['lng']
-    if [new_lat, new_lon] != st.session_state.marker_pos:
-        st.session_state.marker_pos = [new_lat, new_lon]
+    new_pos = [map_output['last_clicked']['lat'], map_output['last_clicked']['lng']]
+    if new_pos != st.session_state.marker_pos:
+        st.session_state.marker_pos = new_pos
         st.rerun()
