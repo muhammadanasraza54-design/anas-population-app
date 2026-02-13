@@ -6,10 +6,9 @@ import folium
 from streamlit_folium import st_folium
 import os
 
-# Page configuration
-st.set_page_config(layout="wide", page_title="Anas TCF Population Tool")
+st.set_page_config(layout="wide", page_title="Anas TCF Tool")
 
-# 📁 Files ke exact naam (Spaces ke sath jo aapke GitHub folder mein hain)
+# 📁 Files ke exact naam (Spaces ke sath)
 FILES = {
     'total': 'pak_total_Pop FN.tif',
     'p05': 'pak_Pri_Pop FN.tif',
@@ -20,83 +19,55 @@ def get_pop_data(lat, lon, rad):
     results = {}
     try:
         for key, path in FILES.items():
-            # Check if file exists to avoid crash
             if not os.path.exists(path):
-                return f"Error: File '{path}' nahi mili. GitHub par naam check karein."
+                return f"Error: {path} nahi mili"
             
             with rasterio.open(path) as ds:
-                # Coordinate ko pixel index mein badalna
+                # Coordinate ko pixel mein badalna
                 row, col = ds.index(lon, lat)
+                window = ds.read(1)
                 
-                # Pixel value read karna
-                data_array = ds.read(1)
-                val = data_array[row, col]
+                # Pixel ki asli value lena
+                pixel_val = window[row, col]
+                pixel_val = max(0, float(pixel_val)) if not np.isnan(pixel_val) else 0
                 
-                # Null values handle karna
-                val = max(0, float(val)) if not np.isnan(val) else 0
+                # 🛠️ Calculation Update:
+                # Agar population bohot kam aa rahi hai, toh iska matlab hai pixel value 
+                # ko area se multiply karne ki zaroorat hai. 
+                # WorldPop ka 1 pixel taqreeban 100m (0.01 sq km) ka hota hai.
+                # Hum radius ke hisab se circle ka area nikal kar multiply kar rahe hain.
+                area_sq_km = math.pi * (rad**2)
                 
-                # Population calculation based on area
-                results[key] = int(val * math.pi * (rad**2))
+                # WorldPop density ko area se multiply karein (assuming 100m resolution)
+                # Hum yahan pixel value ko scale up kar rahe hain
+                results[key] = int(pixel_val * area_sq_km * 100) 
         return results
     except Exception as e:
-        return f"Technical Error: {str(e)}"
+        return str(e)
 
-# --- SIDEBAR UI ---
+# Sidebar UI
 st.sidebar.title("TCF Catchment 2025")
-st.sidebar.markdown("---")
-
-# Radius Slider
 radius = st.sidebar.slider("Select Radius (KM)", 0.5, 5.0, 2.0, step=0.5)
 
-# Session state for coordinates
 if 'pos' not in st.session_state:
-    st.session_state.pos = [24.8607, 67.0011] # Karachi
+    st.session_state.pos = [24.8607, 67.0011]
 
-# Calculate Data
 data = get_pop_data(st.session_state.pos[0], st.session_state.pos[1], radius)
 
-# Display Metrics in Sidebar
 if isinstance(data, dict):
+    # Metrics display
     st.sidebar.metric("📊 Total Population", f"{data['total']:,}")
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("Age Segments:")
-    st.sidebar.write(f"👶 **Primary (5-9):** {data['p05']:,}")
-    st.sidebar.write(f"🏫 **Secondary (10-14):** {data['p10']:,}")
+    st.sidebar.write(f"👶 Primary (5-9): **{data['p05']:,}**")
+    st.sidebar.write(f"🏫 Secondary (10-14): **{data['p10']:,}**")
 else:
-    # Error message display
     st.sidebar.error(data)
 
-st.sidebar.markdown("---")
-st.sidebar.info(f"Lat: {round(st.session_state.pos[0], 4)}, Lon: {round(st.session_state.pos[1], 4)}")
-
-# --- MAP SECTION ---
+# Map
 m = folium.Map(location=st.session_state.pos, zoom_start=13)
+folium.TileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', attr='Google', name='Satellite').add_to(m)
+folium.Circle(st.session_state.pos, radius=radius*1000, color='red', fill=True, fill_opacity=0.3).add_to(m)
 
-# Google Satellite Layer
-folium.TileLayer(
-    tiles='https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
-    attr='Google',
-    name='Google Satellite',
-    overlay=False,
-    control=True
-).add_to(m)
-
-# Circle on Map
-folium.Circle(
-    location=st.session_state.pos,
-    radius=radius * 1000,
-    color='red',
-    fill=True,
-    fill_opacity=0.2
-).add_to(m)
-
-# Map click handler
-map_output = st_folium(m, width="100%", height=750)
-
-if map_output['last_clicked']:
-    new_lat = map_output['last_clicked']['lat']
-    new_lng = map_output['last_clicked']['lng']
-    
-    if [new_lat, new_lng] != st.session_state.pos:
-        st.session_state.pos = [new_lat, new_lng]
-        st.rerun()
+out = st_folium(m, width="100%", height=750)
+if out['last_clicked']:
+    st.session_state.pos = [out['last_clicked']['lat'], out['last_clicked']['lng']]
+    st.rerun()
