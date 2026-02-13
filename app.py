@@ -5,12 +5,11 @@ import math
 import numpy as np
 import folium
 from streamlit_folium import st_folium
-from folium.plugins import Geocoder
 import os
 
-st.set_page_config(layout="wide", page_title="Anas TCF Tool - Search Enabled")
+st.set_page_config(layout="wide", page_title="Anas TCF Tool - Pro")
 
-# 📁 Files Configuration
+# 📁 Files configuration
 FILES = {
     'total': 'pak_total_Pop FN.tif',
     'p05': 'pak_Pri_Pop FN.tif',
@@ -32,48 +31,48 @@ def get_pop_data(lat, lon, rad_km):
         return results
     except: return None
 
-# Sidebar Setup
+# --- SIDEBAR ---
 st.sidebar.title("TCF Catchment 2025")
-radius = st.sidebar.slider("Select Radius (KM)", 0.5, 5.0, 1.0, step=0.5)
 
+# 📍 Google Coordinates Search Inputs
+st.sidebar.subheader("Search by Coordinates")
+input_lat = st.sidebar.number_input("Enter Latitude", value=24.8607, format="%.6f")
+input_lon = st.sidebar.number_input("Enter Longitude", value=67.0011, format="%.6f")
+
+# Update position if numbers change
 if 'pos' not in st.session_state:
-    st.session_state.pos = [24.8607, 67.0011] # Default Karachi
+    st.session_state.pos = [input_lat, input_lon]
+
+if st.sidebar.button("Go to Location"):
+    st.session_state.pos = [input_lat, input_lon]
+    st.rerun()
+
+st.sidebar.markdown("---")
+radius = st.sidebar.slider("Select Radius (KM)", 0.5, 5.0, 1.0, step=0.5)
 
 data = get_pop_data(st.session_state.pos[0], st.session_state.pos[1], radius)
 
 if data:
     st.sidebar.metric("📊 Total Population", f"{data['total']:,}")
-    st.sidebar.write(f"👶 Primary (5-9): **{data['p05']:,}**")
-    st.sidebar.write(f"🏫 Secondary (10-14): **{data['p10']:,}**")
+    st.sidebar.write(f"👶 Primary: **{data['p05']:,}**")
+    st.sidebar.write(f"🏫 Secondary: **{data['p10']:,}**")
 
-# --- MAP SECTION ---
-m = folium.Map(location=st.session_state.pos, zoom_start=13)
+# --- MAP ---
+# Key parameter helps force refresh when position changes
+m = folium.Map(location=st.session_state.pos, zoom_start=14)
 
-# Google Satellite Layer
 folium.TileLayer(
     tiles='https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
     attr='Google', name='Satellite', overlay=False
 ).add_to(m)
 
-# 🔍 Search Bar (Geocoder)
-Geocoder(add_marker=True).add_to(m)
+# Always show Marker and Circle at session_state.pos
+folium.Marker(st.session_state.pos, icon=folium.Icon(color="red", icon="info-sign")).add_to(m)
+folium.Circle(st.session_state.pos, radius=radius*1000, color='red', fill=True, fill_opacity=0.2).add_to(m)
 
-# 📍 Red Pin Marker at current position
-folium.Marker(
-    location=st.session_state.pos,
-    icon=folium.Icon(color="red", icon="info-sign")
-).add_to(m)
+out = st_folium(m, width="100%", height=700, key=f"map_{st.session_state.pos}")
 
-# ⭕ Coverage Circle
-folium.Circle(
-    location=st.session_state.pos,
-    radius=radius * 1000,
-    color='red', fill=True, fill_opacity=0.2
-).add_to(m)
-
-# Handle interactions
-out = st_folium(m, width="100%", height=700)
-
+# Click interaction
 if out['last_clicked']:
     new_pos = [out['last_clicked']['lat'], out['last_clicked']['lng']]
     if new_pos != st.session_state.pos:
