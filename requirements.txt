@@ -1,5 +1,5 @@
 streamlit
+rasterio
 folium
 streamlit-folium
-rasterio
-openpyxl
+numpy
