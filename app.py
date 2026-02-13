@@ -19,6 +19,7 @@ FILES = {
 
 def get_pop_data(lat, lon, rad_km):
     results = {}
+    # 1 degree lat is approx 111km
     deg_lat = rad_km / 111.0
     deg_lon = rad_km / (111.0 * math.cos(math.radians(lat)))
     left, bottom, right, top = (lon - deg_lon, lat - deg_lat, lon + deg_lon, lat + deg_lat)
@@ -32,16 +33,15 @@ def get_pop_data(lat, lon, rad_km):
         return results
     except: return None
 
-# Initialize session state
+# Session state for position
 if 'pos' not in st.session_state:
     st.session_state.pos = [24.8607, 67.0011]
 
-# --- SIDEBAR SEARCH ---
-st.sidebar.title("TCF Catchment 2025")
+# --- SIDEBAR ---
+st.sidebar.title("TCF Catchment 2026")
 
-# 🔍 Direct Search Box
-search_query = st.sidebar.text_input("🔍 Search Location or Coordinates", placeholder="e.g. Orangi Town or 24.8, 67.1")
-
+# 🔍 Search Location
+search_query = st.sidebar.text_input("🔍 Search Location or Coordinates")
 if st.sidebar.button("Search & Update"):
     if search_query:
         try:
@@ -49,36 +49,37 @@ if st.sidebar.button("Search & Update"):
             location = geolocator.geocode(search_query)
             if location:
                 st.session_state.pos = [location.latitude, location.longitude]
-                st.sidebar.success(f"Found: {location.address[:30]}...")
                 st.rerun()
-            else:
-                st.sidebar.error("Location nahi mili!")
-        except:
-            st.sidebar.error("Search error!")
+        except: st.sidebar.error("Search Error!")
 
 st.sidebar.markdown("---")
-radius = st.sidebar.slider("Select Radius (KM)", 0.5, 5.0, 1.0, step=0.5)
+
+# 📏 Range Settings (Unlimited / High Range)
+st.sidebar.subheader("Set Range")
+radius = st.sidebar.number_input("Enter Radius (KM)", min_value=0.1, max_value=500.0, value=1.0, step=0.1)
+diameter = radius * 2
+st.sidebar.info(f"📏 **Diameter:** {diameter:.2f} KM")
 
 # Calculate Data
 data = get_pop_data(st.session_state.pos[0], st.session_state.pos[1], radius)
 
 if data:
     st.sidebar.metric("📊 Total Population", f"{data['total']:,}")
-    st.sidebar.write(f"👶 Primary: **{data['p05']:,}**")
-    st.sidebar.write(f"🏫 Secondary: **{data['p10']:,}**")
-    st.sidebar.info(f"📍 Lat: {st.session_state.pos[0]:.4f}, Lon: {st.session_state.pos[1]:.4f}")
+    st.sidebar.write(f"👶 Primary (5-9): **{data['p05']:,}**")
+    st.sidebar.write(f"🏫 Secondary (10-14): **{data['p10']:,}**")
+    st.sidebar.markdown("---")
+    st.sidebar.caption(f"📍 Location: {st.session_state.pos[0]:.4f}, {st.session_state.pos[1]:.4f}")
 
 # --- MAP ---
-m = folium.Map(location=st.session_state.pos, zoom_start=14)
+m = folium.Map(location=st.session_state.pos, zoom_start=13)
 folium.TileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', attr='Google', name='Satellite').add_to(m)
 
-# Always show Pin and Circle at st.session_state.pos
+# Marker and Circle
 folium.Marker(st.session_state.pos, icon=folium.Icon(color="red", icon="info-sign")).add_to(m)
 folium.Circle(st.session_state.pos, radius=radius*1000, color='red', fill=True, fill_opacity=0.2).add_to(m)
 
-out = st_folium(m, width="100%", height=700, key=f"map_{st.session_state.pos}")
+out = st_folium(m, width="100%", height=700, key=f"map_{st.session_state.pos}_{radius}")
 
-# Click handling
 if out.get("last_clicked"):
     new_pos = [out["last_clicked"]["lat"], out["last_clicked"]["lng"]]
     if new_pos != st.session_state.pos:
