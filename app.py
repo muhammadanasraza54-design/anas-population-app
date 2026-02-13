@@ -1,105 +1,71 @@
 import streamlit as st
 import rasterio
+from rasterio.windows import from_bounds
 import math
 import numpy as np
 import folium
 from streamlit_folium import st_folium
 import os
 
-# Page configuration
-st.set_page_config(layout="wide", page_title="Anas TCF Population Tool")
+st.set_page_config(layout="wide", page_title="Anas TCF Tool")
 
-# 📁 Files ke exact naam (Spaces confirm karein jo aapke GitHub par hain)
+# 📁 Exact File Names from your folder
 FILES = {
     'total': 'pak_total_Pop FN.tif',
     'p05': 'pak_Pri_Pop FN.tif',
     'p10': 'pak_Sec_Pop FN.tif'
 }
 
-def get_pop_data(lat, lon, rad):
+def get_pop_data(lat, lon, rad_km):
     results = {}
+    # Approximation for lat/lon bounding box
+    deg_lat = rad_km / 111.0
+    deg_lon = rad_km / (111.0 * math.cos(math.radians(lat)))
+    
+    left, bottom, right, top = (lon - deg_lon, lat - deg_lat, lon + deg_lon, lat + deg_lat)
+
     try:
         for key, path in FILES.items():
             if not os.path.exists(path):
-                return f"Error: File '{path}' nahi mili."
+                return f"File '{path}' nahi mili."
             
             with rasterio.open(path) as ds:
-                # Coordinate ko pixel index mein badalna
-                row, col = ds.index(lon, lat)
+                # Sirf utna hissa read karna jitna radius hai
+                window = from_bounds(left, bottom, right, top, ds.transform)
+                data = ds.read(1, window=window)
                 
-                # Check if click is inside the map bounds
-                if 0 <= row < ds.height and 0 <= col < ds.width:
-                    # Sirf click wala pixel read karna
-                    window = ds.read(1, window=((row, row+1), (col, col+1)))
-                    val = window[0, 0]
-                    val = max(0, float(val)) if not np.isnan(val) else 0
-                    
-                    # Area-based calculation (Scaling for Karachi/Urban density)
-                    area_sq_km = math.pi * (rad**2)
-                    # Note: WorldPop pixels are approx 100m. 
-                    # Scaling by 100 helps align with urban density expectations.
-                    results[key] = int(val * area_sq_km * 100)
-                else:
-                    results[key] = 0
+                # Filter out null/NaN and sum all pixels in the area
+                valid_data = data[data > 0]
+                total_val = np.nansum(valid_data)
+                
+                # WorldPop accuracy adjustment
+                results[key] = int(total_val)
         return results
     except Exception as e:
-        return f"Technical Error: {str(e)}"
+        return f"Error: {str(e)}"
 
-# --- SIDEBAR UI ---
+# Sidebar
 st.sidebar.title("TCF Catchment 2025")
-st.sidebar.markdown("---")
+radius = st.sidebar.slider("Select Radius (KM)", 0.5, 5.0, 1.0, step=0.5)
 
-# Radius Slider
-radius = st.sidebar.slider("Select Radius (KM)", 0.5, 5.0, 2.0, step=0.5)
-
-# Initialize location
 if 'pos' not in st.session_state:
-    st.session_state.pos = [24.8607, 67.0011] # Karachi default
+    st.session_state.pos = [24.8058, 67.1515] # Current view location
 
-# Get Data
 data = get_pop_data(st.session_state.pos[0], st.session_state.pos[1], radius)
 
-# Display Results
 if isinstance(data, dict):
     st.sidebar.metric("📊 Total Population", f"{data['total']:,}")
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("Age Segments:")
-    st.sidebar.write(f"👶 **Primary (5-9):** {data['p05']:,}")
-    st.sidebar.write(f"🏫 **Secondary (10-14):** {data['p10']:,}")
+    st.sidebar.write(f"👶 Primary (5-9): **{data['p05']:,}**")
+    st.sidebar.write(f"🏫 Secondary (10-14): **{data['p10']:,}**")
 else:
     st.sidebar.error(data)
 
-st.sidebar.markdown("---")
-st.sidebar.info(f"Lat: {round(st.session_state.pos[0], 4)}, Lon: {round(st.session_state.pos[1], 4)}")
+# Map View
+m = folium.Map(location=st.session_state.pos, zoom_start=14)
+folium.TileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', attr='Google', name='Satellite').add_to(m)
+folium.Circle(st.session_state.pos, radius=radius*1000, color='red', fill=True, fill_opacity=0.3).add_to(m)
 
-# --- MAP SECTION ---
-m = folium.Map(location=st.session_state.pos, zoom_start=13)
-
-# Google Satellite Layer
-folium.TileLayer(
-    tiles='https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
-    attr='Google',
-    name='Google Satellite',
-    overlay=False,
-    control=True
-).add_to(m)
-
-# Circle on Map
-folium.Circle(
-    location=st.session_state.pos,
-    radius=radius * 1000,
-    color='red',
-    fill=True,
-    fill_opacity=0.2
-).add_to(m)
-
-# Map click handler
-map_output = st_folium(m, width="100%", height=750)
-
-if map_output['last_clicked']:
-    new_lat = map_output['last_clicked']['lat']
-    new_lng = map_output['last_clicked']['lng']
-    
-    if [new_lat, new_lng] != st.session_state.pos:
-        st.session_state.pos = [new_lat, new_lng]
-        st.rerun()
+out = st_folium(m, width="100%", height=700)
+if out['last_clicked']:
+    st.session_state.pos = [out['last_clicked']['lat'], out['last_clicked']['lng']]
+    st.rerun()
