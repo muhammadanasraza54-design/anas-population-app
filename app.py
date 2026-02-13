@@ -8,47 +8,46 @@ import streamlit.components.v1 as components
 import folium
 from streamlit_folium import st_folium
 
-# Page Config
+# Page Setup
 st.set_page_config(layout="wide", page_title="Anas TCF Multi-Tool")
 
-# --- 🎨 CSS Fixes: Sidebar aur Map Height ---
+# --- 🎨 UI Fixes: Full Height Map & Sidebar ---
 st.markdown("""
     <style>
-        /* Sidebar ko white patti ke nichay lane ke liye */
+        /* Sidebar ko top patti ke nichay rakhne ke liye */
         [data-testid="stSidebar"] { top: 60px !important; height: calc(100vh - 60px) !important; }
+        /* Map ko nichay tak phelane ke liye padding khatam */
         .block-container { padding-top: 0rem !important; padding-bottom: 0rem !important; }
         iframe { border: none; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 📁 Google Drive Direct IDs (Verified) ---
-# Maine aapke "Pop" folder se ye IDs nikali hain
+# --- 📁 Google Drive Direct IDs (Verified from your links) ---
 files_config = {
-    'pak_pop_2025.tif': '1O_MOf7vR6z9GvW-D0V1xJ8Xo_q_L4V9_', # Total
-    'pak_t_05_2025.tif': '1vI3W_mD9HlR7X-k7U8V5wN6r-Zz_L1XG', # Primary
-    'pak_t_10_2025.tif': '1PbWVI5Iw2x1c1JC0-XFKYKxiFdWEFppD'  # Secondary
+    'pak_pop_2025.tif': '1OxPhQtpWnLKgr9qyntNmbPyHo5GtSSKO', # Total Pop 2025
+    'pak_t_10_2025.tif': '1D7PTkPqCI9-dZ1_HLGZBw0vyobYCO0KU', # Secondary (10-14)
+    'pak_t_05_2025.tif': '1dMtumXxkCnhduFbOOy47Ch4Ow8b0hAzB'  # Primary (5-9)
 }
 
 def download_file(file_id, output):
     if not os.path.exists(output):
-        # Direct download link format takay Streamlit file parh sakay
         url = f'https://drive.google.com/uc?id={file_id}&export=download'
         with st.spinner(f'Connecting 2025 Data: {output}...'):
             try:
                 r = requests.get(url, allow_redirects=True)
                 with open(output, 'wb') as f:
                     f.write(r.content)
-            except: st.error(f"Download Error: {output}")
+            except: st.error(f"Link Error: {output}")
 
-# Navigation
+# Navigation Sidebar
 with st.sidebar:
     st.image("https://www.tcf.org.pk/wp-content/uploads/2019/09/logo.svg", width=120)
     st.title("Main Menu")
     app_mode = st.radio("Go to Window:", ["📊 Population Analysis", "🌍 Advanced GIS Map"])
 
-# Population Window Logic
+# --- Window 1: Population Analysis ---
 if app_mode == "📊 Population Analysis":
-    # Download files if they don't exist
+    # Pehli bar files download hongi (Size: ~400MB)
     for name, f_id in files_config.items(): download_file(f_id, name)
     
     if 'pos' not in st.session_state: st.session_state.pos = [24.8607, 67.0011]
@@ -58,24 +57,27 @@ if app_mode == "📊 Population Analysis":
         
         def get_val(f_path):
             try:
-                if not os.path.exists(f_path): return 0.0
+                if not os.path.exists(f_path): return None
                 with rasterio.open(f_path) as ds:
+                    # Point query for 100m resolution
                     row, col = ds.index(st.session_state.pos[1], st.session_state.pos[0])
                     v = ds.read(1)[row, col]
                     return float(v) if v >= 0 and not np.isnan(v) else 0.0
             except: return 0.0
 
-        # Calculations
         t = get_val('pak_pop_2025.tif')
         p = get_val('pak_t_05_2025.tif')
         s = get_val('pak_t_10_2025.tif')
         area = math.pi * (radius**2)
 
-        st.metric("Total Population (2025)", f"{int(t * area):,}")
-        st.write(f"👶 **Primary (5-9):** {int(p * area):,}")
-        st.write(f"🏫 **Secondary (10-14):** {int(s * area):,}")
+        if t is None:
+            st.info("🔄 Files are being prepared. Please refresh in a minute.")
+        else:
+            st.metric("Total Population (2025)", f"{int(t * area):,}")
+            st.write(f"👶 **Primary (5-9):** {int(p * area):,}")
+            st.write(f"🏫 **Secondary (10-14):** {int(s * area):,}")
 
-    # Map setup with full height
+    # Map with Increased Height (800)
     m = folium.Map(location=st.session_state.pos, zoom_start=13)
     folium.TileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', attr='Google Satellite').add_to(m)
     folium.Circle(st.session_state.pos, radius=radius*1000, color='red', fill=True, fill_opacity=0.1).add_to(m)
@@ -85,8 +87,9 @@ if app_mode == "📊 Population Analysis":
         st.session_state.pos = [out['last_clicked']['lat'], out['last_clicked']['lng']]
         st.rerun()
 
+# --- Window 2: GIS Map ---
 elif app_mode == "🌍 Advanced GIS Map":
     try:
         with open("AnasGhouri_Ultimate_GIS.html", "r", encoding='utf-8') as f:
             components.html(f.read(), height=950, scrolling=True)
-    except: st.error("GIS File Missing")
+    except: st.error("GIS HTML file not found in GitHub.")
