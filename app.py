@@ -72,7 +72,7 @@ data = get_pop_data(st.session_state.pos[0], st.session_state.pos[1], radius)
 
 if data:
     st.sidebar.metric("📊 Total Population", f"{data['total']:,}")
-    st.sidebar.write(f"👶🏘 Primary (5-9): **{data['p05']:,}**")
+    st.sidebar.write(f"🏡 Primary (5-9): **{data['p05']:,}**")
     st.sidebar.write(f"🏫 Secondary (10-14): **{data['p10']:,}**")
     st.sidebar.markdown("---")
     st.sidebar.caption(f"📍 {st.session_state.pos[0]:.4f}, {st.session_state.pos[1]:.4f}")
