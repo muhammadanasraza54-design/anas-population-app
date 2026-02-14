@@ -40,10 +40,10 @@ if 'pos' not in st.session_state:
     st.session_state.pos = [24.8607, 67.0011]
 
 # --- SIDEBAR ---
-st.sidebar.title("TCF Catchment 2026")
+st.sidebar.title("TCF Engineering")
 
 # 🔗 GIS File Button
-st.sidebar.markdown("### 🗺️ External Maps")
+st.sidebar.markdown("### 🗺️ TCF GIS Maps")
 st.sidebar.link_button("🌐 Open Ultimate GIS File", GIS_URL)
 st.sidebar.markdown("---")
 
