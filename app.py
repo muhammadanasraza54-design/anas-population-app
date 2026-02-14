@@ -9,7 +9,7 @@ from geopy.geocoders import Nominatim
 import os
 
 # Page Configuration for full screen look
-st.set_page_config(layout="wide", page_title="Anas TCF Pro Tool", initial_sidebar_state="expanded")
+st.set_page_config(layout="wide", page_title="TCF Map and Population tool", initial_sidebar_state="expanded")
 
 # 📁 TIF Files mapping
 FILES = {
