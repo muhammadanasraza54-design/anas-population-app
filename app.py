@@ -57,7 +57,7 @@ if st.sidebar.button("Search & Update"):
             if location:
                 st.session_state.pos = [location.latitude, location.longitude]
                 st.rerun()
-        except: st.sidebar.error("Location nahi mili!")
+        except: st.sidebar.error("Find Location")
 
 st.sidebar.markdown("---")
 
